@@ -1,4 +1,5 @@
 import os,sys
+import argparse
 import asyncio
 import logging
 from dotenv import dotenv_values
@@ -57,19 +58,19 @@ class Bot(commands.Bot):
             return
         return await super().on_command_error(ctx, exception)
 
-    def generate_invite(self) -> str:
-        """
-        Create an invite url for your bot; leads to discord portal where you (logged in with a user account) can invite the bot user to a server
-        """
-        invite_url = f"https://discordapp.com/oauth2/authorize?client_id={config['CLIENT_ID']}&scope=bot&permissions={config['PERMISSIONS']}"
-        return invite_url
+def generate_invite() -> str:
+    """
+    Create an invite url for your bot; leads to discord portal where you (logged in with a user account) can invite the bot user to a server
+    """
+    invite_url = f"https://discordapp.com/oauth2/authorize?client_id={config['CLIENT_ID']}&scope=bot&permissions={config['PERMISSIONS']}"
+    return invite_url
 
     # !MISTAKE!
     # @commands.command(name="ping") # Is run before init and so does not belong to the bot 
     # async def ping(self, ctx):
     #     await ctx.send("pong")
 
-async def main():
+async def init_bot():
     bot = Bot()
 
     # Load our first command right away! 
@@ -99,21 +100,51 @@ async def main():
     async with bot:
         # Must be used within an asynchronous main function (async def main)
         await admin.setup(bot)
-        await bot.start(config['CLIENT_SECRET']) # Authenticates a valid bot user based on your application settings
+        #await bot.run(config['CLIENT_SECRET'])
+        await bot.start(config['TOKEN']) # Authenticates a valid bot user based on your application settings
     
-if __name__ == "__main__":
-    #main()
-    #asyncio.run(main()) # Used if calling an asynchronous main function
     
-    # Equivalent of asyncio.run(main()) but gracefully terminates on sigint
-    loop = asyncio.new_event_loop()
-    main_task = loop.create_task(main())
+def parser(argv) -> argparse.ArgumentParser :
+    parser = argparse.ArgumentParser(description="""
+    Run a discord bot
+    """)
+    parser.add_argument(
+            '-i',  '--invite',
+            action='store_true',
+            help="Generate an invite link for your bot to be added to discord"
+            )
 
-    for signal in [SIGINT, SIGTERM]:
-        loop.add_signal_handler(signal, main_task.cancel)
-    try:
-        loop.run_until_complete(main_task)
-    except asyncio.exceptions.CancelledError:
-        print("\nExiting bot")
-    finally:
-        loop.close()
+    args = parser.parse_args(argv)
+    
+    return args
+
+def main(argv) -> None:
+    args = parser(argv)
+
+    if args.invite:
+        print(f"URL: {generate_invite()}")
+        return
+
+    else:
+        #main()
+        #asyncio.run(main()) # Used if calling an asynchronous main function
+        
+        # Equivalent of asyncio.run(main()) but gracefully terminates on sigint
+        loop = asyncio.new_event_loop()
+        bot_task = loop.create_task(init_bot())
+
+        for signal in [SIGINT, SIGTERM]:
+            loop.add_signal_handler(signal, bot_task.cancel)
+        try:
+            loop.run_until_complete(bot_task)
+        except asyncio.exceptions.CancelledError:
+            print("\nExiting bot")
+        finally:
+            loop.close()
+
+
+if __name__ == "__main__":
+    
+    exit(main(sys.argv[1:]))
+
+  
